@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Survey Heart Project</string>
+    <string name="update">Update</string>
+    <string name="add">Add</string>
+    <string name="user_id">"User Id: "</string>
+    <string name="name_should_not_be_empty">Name should not be empty</string>
+</resources>
