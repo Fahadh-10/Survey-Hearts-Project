@@ -1,9 +1,12 @@
 package com.example.surveyheartproject.Service
 
+import com.example.surveyheartproject.helper.BASE_URL
 import com.example.surveyheartproject.model.TodoItem
 import com.example.surveyheartproject.model.TodoItemRequest
 import com.example.surveyheartproject.model.TodoResponse
 import retrofit2.Call
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -15,23 +18,24 @@ import retrofit2.http.Query
 
 interface APIService {
     @GET("todos")
-    @Headers("Content-Type: application/json")
-    fun getTodos(): Call<TodoResponse>
-
-    @GET("todos")
-    fun getTodos(@Query("limit") limit: Int, @Query("skip") skip: Int): Call<TodoResponse>
+    suspend fun getTodos(@Query("limit") limit: Int, @Query("skip") skip: Int): TodoResponse
 
     @POST("todos/add")
-    @Headers("Content-Type: application/json")
-    fun addTodo(@Body todoItemRequest: TodoItemRequest): Call<TodoItem>
+    suspend fun addTodo(@Body todoItemRequest: TodoItemRequest): TodoItem
 
     @PUT("todos/{id}")
-    @Headers("Content-Type: application/json")
-    fun updateTodoStatus(@Path("id") id: Int, @Body requestBody: Map<String, Boolean>): Call<TodoItem>
+    suspend fun updateTodoStatus(@Path("id") id: Int, @Body requestBody: Map<String, Boolean>): TodoItem
 
     @DELETE("todos/{id}")
-    @Headers("Content-Type: application/json")
-    fun deleteTodo(@Path("id") id: Int): Call<Unit>
+    suspend fun deleteTodo(@Path("id") id: Int): Unit
 
-
+    companion object {
+        fun create(): APIService {
+            val retrofit = Retrofit.Builder()
+                .baseUrl(BASE_URL) // Replace with your base URL
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            return retrofit.create(APIService::class.java)
+        }
+    }
 }

@@ -23,6 +23,22 @@ object TodoDao {
     }
 
     /**
+     * Saves or updates multiple todos items in the Realm database.
+     * @param todos The list of todo items to be saved or updated.
+     */
+    fun saveOrUpdateTodos(todos: List<TodoItem>) {
+        val realm = Realm.getDefaultInstance()
+        try {
+            realm.beginTransaction()
+            realm.insertOrUpdate(todos)
+            realm.commitTransaction()
+        } catch (e: IOException) {
+            realm.cancelTransaction()
+        }
+        realm.close()
+    }
+
+    /**
      * Fetches the list of todos items stored in the Realm database.
      * @return An ArrayList containing the fetched todos items.
      */

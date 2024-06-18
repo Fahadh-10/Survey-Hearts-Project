@@ -1,182 +1,132 @@
 package com.example.surveyheartproject.activity
 
-import android.annotation.SuppressLint
 import android.app.AlertDialog
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.view.View.GONE
-import android.view.View.VISIBLE
 import android.widget.Toast
+import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.Observer
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.surveyheartproject.Dao.TodoDao
+import com.example.surveyheartproject.R
+import com.example.surveyheartproject.Service.APIService
+import com.example.surveyheartproject.manager.TodoRepository
+import com.example.surveyheartproject.ViewModelFactory
 import com.example.surveyheartproject.adapter.MainListADTR
 import com.example.surveyheartproject.databinding.ActivityMainBinding
-import com.example.surveyheartproject.manager.DataManager
 import com.example.surveyheartproject.manager.DialogManager.ViewUpdateTodoDialog
 import com.example.surveyheartproject.model.TodoItem
-import io.realm.Realm
-import io.realm.RealmConfiguration
+import com.example.surveyheartproject.viewmodel.MainViewModel
+import com.example.surveyheartproject.Result
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    lateinit var mainListADTR: MainListADTR
-    private lateinit var viewUpdateTodoDialog: ViewUpdateTodoDialog
-    private var limit = 10
-    private var skip = 0
-    private var isLoading = false
+    private lateinit var mainViewModel: MainViewModel
+    private lateinit var mainListADTR: MainListADTR
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        Realm.init(this)
-        Realm.setDefaultConfiguration(RealmConfiguration.Builder().deleteRealmIfMigrationNeeded().build())
-        setAdapter()
-        setUpListeners()
-        fetchTodosServiceCall()
+        binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
+
+        val apiService = APIService.create()
+        val todoDao = TodoDao
+
+        val factory = ViewModelFactory(TodoRepository(apiService, todoDao))
+        mainViewModel = ViewModelProvider(this, factory).get(MainViewModel::class.java)
+
+        binding.viewModel = mainViewModel
+        binding.lifecycleOwner = this
+
+        setupAdapter()
+        setupListeners()
+        observeViewModel()
+
+        if (todoDao.fetchUser().size >  0){
+            mainViewModel.fetchTodosFromDb()
+        } else {
+            mainViewModel.fetchTodos()
+        }
     }
 
-    override fun onResume() {
-        super.onResume()
-        fetchTodosServiceCall()
-    }
-
-    private fun setAdapter() {
-        binding.homeRV.layoutManager =
-            LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
+    private fun setupAdapter() {
+        binding.homeRV.layoutManager = LinearLayoutManager(this)
         mainListADTR = MainListADTR()
         binding.homeRV.adapter = mainListADTR
         mainListADTR.setOnClickListeners(object : MainListADTR.OnItemClickListeners {
             override fun onUpdateItemClick(position: Int, todoItem: TodoItem) {
-                viewUpdateTodoDialog = ViewUpdateTodoDialog(todoItem)
-                viewUpdateTodoDialog.setOnUpdateListener { updatedTodoItem ->
-                    mainListADTR.todoLists[position] = updatedTodoItem
-                    mainListADTR.notifyItemChanged(position)
-                    TodoDao.saveOrUpdateTodo(updatedTodoItem)
-                }
-                viewUpdateTodoDialog.show(supportFragmentManager, viewUpdateTodoDialog.tag)
+                showUpdateDialog(todoItem)
             }
 
             override fun onDeleteItemClick(position: Int, todoItem: TodoItem) {
-                showDeleteAlert(todoItem, position)
+                deleteTodoItemAlertDialog(todoItem.id)
             }
         })
     }
 
-    /**
-     * This function is used to set up views for UI elements
-     */
-    private fun setUpListeners() {
+    private fun deleteTodoItemAlertDialog(id: Int) {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("")
+        builder.setMessage("Are you sure you want to Delete?")
+        builder.setPositiveButton("Yes") { _, _ ->
+            mainViewModel.deleteTodo(id)
+        }
+
+        builder.setNegativeButton("No") { dialog, _ ->
+            dialog.dismiss()
+        }
+        builder.create().show()
+    }
+
+    private fun setupListeners() {
         binding.addIV.setOnClickListener {
-            viewUpdateTodoDialog = ViewUpdateTodoDialog()
-            viewUpdateTodoDialog.show(supportFragmentManager, viewUpdateTodoDialog.tag)
+            showUpdateDialog(null)
         }
 
         binding.homeRV.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                if (!recyclerView.canScrollVertically(1) && !isLoading) {
-                    fetchTodosServiceCall()
+                if (!recyclerView.canScrollVertically(1) && !mainViewModel.isLoading) {
+                    mainViewModel.fetchTodos()
                 }
             }
         })
     }
 
-    /**
-     * This service call is used to fetch the todos items based on the pagination.
-     * If there is no internet we will show the products which is in DB
-     */
-    private fun fetchTodosServiceCall() {
-        isLoading = true
-        if (isNetworkAvailable()) {
-            binding.progressBar.visibility = if (skip == 0) VISIBLE else GONE
-            DataManager.getTodos(limit, skip, object : DataManager.APICallback<List<TodoItem>> {
-                override fun onSuccess(response: List<TodoItem>) {
-                    isLoading = false
-                    if (skip == 0) {
-                        binding.progressBar.visibility = GONE
-                        mainListADTR.todoLists.clear()
-                    }
-                    mainListADTR.todoLists.addAll(response)
-                    mainListADTR.notifyDataSetChanged()
-                    skip += limit
-                    mainListADTR.isFullyLoaded = response.isEmpty()
-                }
+    private fun observeViewModel() {
+        mainViewModel.todos.observe(this, Observer {
+            mainListADTR.updateList(it)
+        })
 
-                override fun onFailure(message: String) {
-                    if (skip == 0) {
-                        binding.progressBar.visibility = GONE
-                    }
-                    isLoading = false
-                    getTodoListFromDB()
-                }
-            })
-        } else {
-            getTodoListFromDB()
-        }
-    }
+        mainViewModel.error.observe(this, Observer {
+            Toast.makeText(this@MainActivity, it, Toast.LENGTH_SHORT).show()
+        })
 
-    /**
-     * This function is used to fetch the todos items from database
-     */
-    private fun getTodoListFromDB(){
-        if (skip == 0) {
-            binding.progressBar.visibility = GONE
-        }
-        val localTodos = TodoDao.fetchUser()
-        mainListADTR.todoLists = localTodos.distinctBy { it.id } as ArrayList<TodoItem>
-        mainListADTR.notifyDataSetChanged()
-    }
-
-
-    //Note : I haven't used this service call, because when we add it locally, we can't able to delete it in the server
-    private fun deleteTodoItem(todoItem: TodoItem) {
-        DataManager.deleteTodo(todoItem.id, object : DataManager.APICallback<Unit> {
-            override fun onSuccess(response: Unit) {
-                Toast.makeText(this@MainActivity, "Todo item deleted successfully", Toast.LENGTH_SHORT).show()
-                fetchTodosServiceCall()
+        mainViewModel.addTodoResult.observe(this, Observer {
+            if (it.status == Result.Status.SUCCESS) {
+                mainListADTR.addItem(it.data!!)
+            } else {
+                Toast.makeText(this@MainActivity, it.message ?: "Error adding todo", Toast.LENGTH_SHORT).show()
             }
+        })
 
-            override fun onFailure(message: String) {
-                Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+        mainViewModel.updateTodoResult.observe(this, Observer {
+            if (it.status == Result.Status.SUCCESS) {
+                mainListADTR.updateItem(it.data!!)
+            } else {
+                Toast.makeText(this@MainActivity, it.message ?: "Error updating todo", Toast.LENGTH_SHORT).show()
             }
         })
     }
 
-    @SuppressLint("ObsoleteSdkInt")
-    private fun Context.isNetworkAvailable(): Boolean {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork
-            val networkCapabilities = connectivityManager.getNetworkCapabilities(network)
-            networkCapabilities != null &&
-                    (networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                            networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
-        } else {
-            val networkInfo = connectivityManager.activeNetworkInfo
-            networkInfo != null && networkInfo.isConnected
+    private fun showUpdateDialog(todoItem: TodoItem?) {
+        val dialog = ViewUpdateTodoDialog(todoItem)
+        dialog.setOnUpdateListener {
+            mainViewModel.fetchTodosFromDb()
         }
-    }
-
-    private fun showDeleteAlert(todoItem: TodoItem, position: Int) {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("")
-        builder.setMessage("Are you sure you want to delete?")
-        builder.setPositiveButton("Yes") { _, _ ->
-            TodoDao.deleteTodo(todoItem.id)
-            mainListADTR.todoLists.removeAt(position)
-            mainListADTR.notifyItemRemoved(position)
-        }
-        builder.setNegativeButton("No", null)
-        builder.setCancelable(false)
-        builder.show()
+        dialog.show(supportFragmentManager, "UpdateTodoDialog")
     }
 }
+
 

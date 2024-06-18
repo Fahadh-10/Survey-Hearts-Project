@@ -13,7 +13,7 @@ import com.example.surveyheartproject.R
 import com.example.surveyheartproject.databinding.MainListBinding
 import com.example.surveyheartproject.model.TodoItem
 
-class MainListADTR() : RecyclerView.Adapter<MainListADTR.HomeListVH>() {
+class MainListADTR : RecyclerView.Adapter<MainListADTR.HomeListVH>() {
 
     var todoLists = ArrayList<TodoItem>()
     var isFullyLoaded = false
@@ -62,4 +62,22 @@ class MainListADTR() : RecyclerView.Adapter<MainListADTR.HomeListVH>() {
         }
     }
 
+    fun addItem(todoItem: TodoItem) {
+        todoLists.add(0, todoItem)
+        notifyDataSetChanged()
+    }
+
+    fun updateItem(todoItem: TodoItem) {
+        val index = todoLists.indexOfFirst { it.id == todoItem.id }
+        if (index != -1) {
+            todoLists[index] = todoItem
+            notifyItemChanged(index)
+        }
+    }
+
+    fun updateList(newList: List<TodoItem>) {
+        todoLists.clear()
+        todoLists.addAll(newList)
+        notifyDataSetChanged()
+    }
 }

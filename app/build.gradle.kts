@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id ("kotlin-kapt")
     id ("realm-android")
+//    id ("dagger.hilt.android.plugin")
 }
 
 android {
@@ -37,6 +38,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        dataBinding = true
         buildConfig = true
     }
 }
@@ -54,4 +56,14 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.9.0")
+
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.2") // View model
+    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.2")  // Live data
+
+//    implementation("com.google.dagger:hilt-android:2.44")
+//    kapt ("com.google.dagger:hilt-compiler:2.44")
+//    implementation ("androidx.hilt:hilt-lifecycle-viewmodel:1.0.0-alpha03")
+//    kapt ("androidx.hilt:hilt-compiler:1.0.0")
+
+    //Latest Survey Heart
 }
